@@ -487,6 +487,12 @@ export class AceX402Client {
       `/api/v1/orders/${encodeURIComponent(orderId)}/pay/`,
       ensureTrailingSlash(this.config.platformBaseUrl)
     );
+    await this.assertOrderPaymentWithinConfiguredLimit(
+      endpoint,
+      { pay_way: "X402" },
+      serviceName,
+      orderId
+    );
     const fetchWithPayment = await this.buildX402Fetch();
     const response = await fetchWithPayment(endpoint, {
       method: "POST",
@@ -523,6 +529,58 @@ export class AceX402Client {
     }
 
     return payment;
+  }
+
+  private async assertOrderPaymentWithinConfiguredLimit(
+    endpoint: URL,
+    body: JsonRecord,
+    serviceName: AceServiceName,
+    orderId: string
+  ): Promise<void> {
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.getPlatformToken()}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(body)
+    });
+    const payload = await readJsonResponse(response);
+
+    if (response.status === 402) {
+      const requirement = extractX402RequirementSummary(
+        payload,
+        this.config.x402Network
+      );
+
+      if (!requirement) {
+        return;
+      }
+
+      const maxAllowedAtomic = usdcToAtomic(this.config.x402MaxPaymentUsdc);
+
+      if (requirement.maxAmountRequiredAtomic > maxAllowedAtomic) {
+        throw new Error(
+          [
+            `Ace x402 payment for ${serviceName} order ${orderId} requires ${formatUsdc(requirement.maxAmountRequiredUsdc)} USDC,`,
+            `which exceeds ACE_X402_MAX_PAYMENT_USDC=${formatUsdc(this.config.x402MaxPaymentUsdc)}.`,
+            "Choose a smaller Ace package/order, fund the Base USDC payer wallet, or raise ACE_X402_MAX_PAYMENT_USDC only if this spend is intentional.",
+            requirement.network ? `Network: ${requirement.network}.` : "",
+            requirement.asset ? `Asset: ${requirement.asset}.` : ""
+          ]
+            .filter(Boolean)
+            .join(" ")
+        );
+      }
+
+      return;
+    }
+
+    if (!response.ok) {
+      throw new Error(
+        formatAceOrderPaymentFailure(serviceName, orderId, response.status, payload)
+      );
+    }
   }
 
   private buildRealResult(input: {
@@ -724,6 +782,13 @@ interface AceX402PaymentProof {
   receiptPayload: JsonRecord;
 }
 
+interface X402RequirementSummary {
+  network: string | null;
+  asset: string | null;
+  maxAmountRequiredAtomic: bigint;
+  maxAmountRequiredUsdc: number;
+}
+
 const SERVICE_LABELS: Record<AceServiceName, string> = {
   web_search: "web search",
   entity_enrichment: "entity enrichment",
@@ -805,6 +870,53 @@ function buildX402ProofFromHeaders(input: {
       createdAt: nowIso(),
       ...(input.extraPayload ?? {})
     }
+  };
+}
+
+function extractX402RequirementSummary(
+  payload: JsonRecord,
+  configuredNetwork: string
+): X402RequirementSummary | null {
+  const accepts = Array.isArray(payload.accepts) ? payload.accepts : [];
+
+  if (accepts.length === 0) {
+    return null;
+  }
+
+  const selected = selectExactPaymentForConfiguredNetwork(configuredNetwork)(
+    accepts,
+    configuredNetwork,
+    "exact"
+  );
+  const record = toJsonRecord(selected);
+  const rawAmount =
+    readString(record, "maxAmountRequired") ??
+    readString(record, "amount") ??
+    String(record.maxAmountRequired ?? record.amount ?? "");
+
+  if (!rawAmount.trim()) {
+    return null;
+  }
+
+  let atomicAmount: bigint;
+
+  try {
+    atomicAmount = BigInt(rawAmount);
+  } catch {
+    const parsed = Number(rawAmount);
+
+    if (!Number.isFinite(parsed) || parsed <= 0) {
+      return null;
+    }
+
+    atomicAmount = usdcToAtomic(parsed);
+  }
+
+  return {
+    network: readString(record, "network"),
+    asset: readString(record, "asset"),
+    maxAmountRequiredAtomic: atomicAmount,
+    maxAmountRequiredUsdc: Number(atomicAmount) / 1_000_000
   };
 }
 
@@ -930,6 +1042,13 @@ function usdcToAtomic(value: number): bigint {
   }
 
   return BigInt(Math.ceil(value * 1_000_000));
+}
+
+function formatUsdc(value: number): string {
+  return value.toLocaleString("en-US", {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 6
+  });
 }
 
 async function withDateNowOffset<T>(

@@ -112,4 +112,64 @@ describe("AceX402Client order preparation", () => {
       /ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH/
     );
   });
+
+  it("reports the required Ace x402 amount when it exceeds the configured cap", async () => {
+    globalThis.fetch = (async (
+      input: Parameters<typeof fetch>[0],
+      init?: Parameters<typeof fetch>[1]
+    ) => {
+      const url = String(input);
+
+      if (url.endsWith("/api/v1/orders/")) {
+        return new Response(JSON.stringify({ id: "order-web" }), {
+          status: 201,
+          headers: { "Content-Type": "application/json" }
+        });
+      }
+
+      if (url.endsWith("/api/v1/orders/order-web/pay/")) {
+        return new Response(
+          JSON.stringify({
+            x402Version: 1,
+            accepts: [
+              {
+                scheme: "exact",
+                network: "base",
+                asset: "0x833589fcd6edb6e08f4c7c32d4f71b54bda02913",
+                payTo: "0x0000000000000000000000000000000000000000",
+                maxAmountRequired: "63200000",
+                resource: url,
+                description: "Ace package payment"
+              }
+            ]
+          }),
+          {
+            status: 402,
+            headers: { "Content-Type": "application/json" }
+          }
+        );
+      }
+
+      return new Response(JSON.stringify({ ok: true }), {
+        status: 200,
+        headers: { "Content-Type": "application/json" }
+      });
+    }) as typeof fetch;
+
+    const client = new AceX402Client({
+      ...baseConfig,
+      ACE_X402_MAX_PAYMENT_USDC: 13
+    });
+
+    await client.prepareOrdersForServices(["web_search"]);
+
+    await assert.rejects(
+      () =>
+        client.callWebSearchService({
+          query: "Solana token legitimacy",
+          reasonForCall: "Web search was purchased because token metadata had external context."
+        }),
+      /requires 63\.20 USDC.*ACE_X402_MAX_PAYMENT_USDC=13\.00/s
+    );
+  });
 });

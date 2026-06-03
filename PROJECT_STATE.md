@@ -185,6 +185,7 @@ Completed:
 - Updated local `.env` to enable `ACE_X402_AUTO_CREATE_ORDERS=true` without printing secrets. The Ace account-specific `ACE_X402_ORDER_APPLICATION_ID_*` and `ACE_X402_ORDER_PACKAGE_ID_*` values are now required before real automatic order creation can succeed.
 - Added `npm --prefix agent run ace:service-map`, a read-only helper that maps configured Ace service paths to Ace service ids/packages and checks whether account-specific application ids already exist.
 - Current local Ace env includes the three visible application ids from Ace Platform plus the minimum package id shown by `ace:service-map`; backend readiness now reports `aceX402: configured`.
+- Added Ace x402 payment preflight before signing order payments so package orders that exceed `ACE_X402_MAX_PAYMENT_USDC` fail with the required USDC amount and safety guidance instead of the generic x402-fetch "Payment amount exceeds maximum allowed" error.
 
 ## Latest Anti-Wash Policy Fix
 
