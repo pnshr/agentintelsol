@@ -1,0 +1,28 @@
+{
+  "name": "agentintel-broker",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Autonomous Solana intelligence service with x402 payments and operational audit trails.",
+  "scripts": {
+    "install:all": "npm --prefix agent install && npm --prefix web install",
+    "dev:backend": "npm --prefix agent run dev",
+    "dev:frontend": "npm --prefix web run dev",
+    "build": "npm --prefix agent run build && npm --prefix web run build",
+    "test": "npm --prefix agent test",
+    "demo:workflow": "npm --prefix agent run demo:run",
+    "demo:synapse-real": "npm --prefix agent run demo:synapse-real",
+    "demo:seed": "npm --prefix agent run demo:seed",
+    "sap:check": "npm --prefix agent run sap:check",
+    "sap:register": "npm --prefix agent run sap:register",
+    "ace:check": "npm --prefix agent run ace:check",
+    "ace:orders": "npm --prefix agent run ace:orders",
+    "sentinel:check": "npm --prefix agent run sentinel:check",
+    "db:reset": "npm --prefix agent run db:reset",
+    "docker:up": "docker compose up --build",
+    "docker:down": "docker compose down",
+    "docker:reset": "docker compose down -v"
+  },
+  "engines": {
+    "node": ">=24.0.0"
+  }
+}

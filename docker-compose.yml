@@ -1,0 +1,89 @@
+x-agent-env: &agent-env
+  NODE_ENV: development
+  PORT: "3001"
+  DATABASE_URL: file:/data/agentintel.db
+  SAP_AGENT_ID: mock-sap-agent-local
+  SAP_PRIVATE_KEY: ""
+  SAP_REGISTRY_ENDPOINT: ""
+  SAP_ENABLE_MAINNET_WRITES: "false"
+  SAP_MOCK_MODE: "true"
+  AGENT_PUBLIC_URL: ""
+  AGENT_X402_ENDPOINT: ""
+  OOBE_API_KEY: ""
+  SYNAPSE_RPC_URL: ""
+  SYNAPSE_API_KEY: ""
+  SYNAPSE_MOCK_MODE: "true"
+  ACE_API_KEY: ""
+  ACE_SERVICE_BASE_URL: ""
+  ACE_X402_FACILITATOR_URL: mock://ace-x402-facilitator
+  ACE_X402_PRIVATE_KEY: ""
+  ACE_ACCOUNT_ID: mock-ace-account-local
+  ACE_MOCK_MODE: "true"
+  SENTINEL_AGENT_ID: AzqhCKhku9TX3ScVtQw5nffLJ6PoA8r3P6HiTdinuAKz
+  SENTINEL_ENDPOINT: https://agent.sentinel.oobeprotocol.ai
+  SENTINEL_CHECK_PATH: /tools/:name
+  SENTINEL_HTTP_METHOD: "POST"
+  SENTINEL_API_KEY: ""
+  SENTINEL_MERCHANT_WALLET: Ccr2yK3hLALU4p8oNRqrh4dGuvPJTth5KCLMio8cE1ph
+  SENTINEL_DEPOSITOR_WALLET: ""
+  SENTINEL_TOOL_TOKEN: spl-token_rugCheck
+  SENTINEL_TOOL_WALLET: spl-token_getTokenAccounts
+  SENTINEL_MIN_ESCROW_LAMPORTS: "10000000"
+  SENTINEL_ESCROW_NONCE: "0"
+  SENTINEL_ESCROW_DEPOSIT_LAMPORTS: "10000000"
+  SENTINEL_OPEN_ESCROW_WRITE: "false"
+  SENTINEL_MOCK_MODE: "true"
+  DEMO_TOKEN_ADDRESS: So11111111111111111111111111111111111111112
+  DEMO_WALLET_ADDRESS: "11111111111111111111111111111111"
+  MAX_DAILY_SPEND_USDC: "10"
+  MAX_SPEND_PER_RUN_USDC: "1"
+  MAX_TOOL_CALLS_PER_RUN: "20"
+
+services:
+  agent:
+    image: agentintel-broker-agent:local
+    build:
+      context: ./agent
+      dockerfile: Dockerfile
+    environment: *agent-env
+    ports:
+      - "3001:3001"
+    volumes:
+      - agent-data:/data
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:3001/api/health').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))"
+        ]
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  seed:
+    image: agentintel-broker-agent:local
+    command: ["node", "dist/scripts/seedDemoData.js"]
+    environment: *agent-env
+    volumes:
+      - agent-data:/data
+    depends_on:
+      agent:
+        condition: service_healthy
+    restart: "no"
+
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: http://localhost:3001
+    ports:
+      - "5173:80"
+    depends_on:
+      agent:
+        condition: service_healthy
+
+volumes:
+  agent-data:
