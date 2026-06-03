@@ -19,11 +19,22 @@ export interface AceClientConfig {
   x402Network: string;
   x402MaxPaymentUsdc: number;
   x402RequirePayment: boolean;
+  x402AutoCreateOrders: boolean;
   x402OrderId: string;
   x402OrderIds: Partial<Record<AceServiceName, string>>;
+  x402OrderApplicationIds: Partial<Record<AceServiceName, string>>;
+  x402OrderPackageIds: Partial<Record<AceServiceName, string>>;
+  x402OrderAmounts: Partial<Record<AceServiceName, number>>;
   servicePaths: Record<AceServiceName, string>;
   aiModel: string;
   mockMode: boolean;
+}
+
+export interface AcePreparedOrder {
+  serviceName: AceServiceName;
+  orderId: string;
+  created: boolean;
+  source: "created" | "configured";
 }
 
 export interface AceWebSearchInput {

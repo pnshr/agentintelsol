@@ -2,7 +2,7 @@
 
 Current status: AgentIntel Broker is a working autonomous Solana intelligence service with a TypeScript backend, React dashboard, SQLite audit storage, SAP discovery, Synapse RPC, Ace x402 service calls, Sentinel checks, risk scoring, reports, and operational readiness checks.
 
-Last updated: 2026-05-31
+Last updated: 2026-06-03
 
 ## Product Positioning
 
@@ -119,6 +119,9 @@ Ace x402:
 - Three service methods exist: web search, entity enrichment, and AI classification.
 - Real x402 uses `x402-fetch`.
 - Receipts are stored in `payment_receipts` and surfaced in the dashboard.
+- Workflow startup can create fresh Ace Platform orders automatically when `ACE_X402_AUTO_CREATE_ORDERS=true`.
+- Auto-created order ids are kept in memory for the current workflow only, then used for x402 payment; Finished or Failed orders are not reused.
+- Automatic order creation requires `ACE_X402_ORDER_APPLICATION_ID_*` values for the three Ace services and an Ace platform token with permission to `POST /api/v1/orders/`.
 
 Sentinel:
 
@@ -170,6 +173,16 @@ Completed:
 - Rewrote demo script as a product walkthrough.
 - Replaced SAP evidence doc with SAP registration documentation.
 - Removed external-review-only docs from `docs/`.
+
+## Latest Ace x402 Update
+
+Completed:
+
+- Added automatic fresh Ace order preparation at workflow start.
+- Added typed env vars for Ace order application ids, optional package ids, and per-service order amounts.
+- Updated Ace integration status so real x402 can be considered configured either with manual per-service order ids or with automatic order creation config.
+- Improved Ace order payment errors so Finished/Failed orders produce actionable messages instead of raw platform JSON.
+- Updated local `.env` to enable `ACE_X402_AUTO_CREATE_ORDERS=true` without printing secrets. The missing `ACE_X402_ORDER_APPLICATION_ID_*` values still need to be filled before real automatic order creation can succeed.
 
 Verification after cleanup:
 

@@ -16,6 +16,7 @@ import type {
   AceAIClassificationInput,
   AceClientConfig,
   AceEntityEnrichmentInput,
+  AcePreparedOrder,
   AceServiceCallResult,
   AceServiceName,
   AceWebSearchInput
@@ -23,6 +24,7 @@ import type {
 
 export class AceX402Client {
   private readonly config: AceClientConfig;
+  private readonly runtimeOrderIds: Partial<Record<AceServiceName, string>> = {};
 
   public constructor(
     config: Pick<
@@ -37,10 +39,20 @@ export class AceX402Client {
       | "ACE_X402_NETWORK"
       | "ACE_X402_MAX_PAYMENT_USDC"
       | "ACE_X402_REQUIRE_PAYMENT"
+      | "ACE_X402_AUTO_CREATE_ORDERS"
       | "ACE_X402_ORDER_ID"
       | "ACE_X402_ORDER_ID_WEB_SEARCH"
       | "ACE_X402_ORDER_ID_ENTITY_ENRICHMENT"
       | "ACE_X402_ORDER_ID_AI_CLASSIFICATION"
+      | "ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH"
+      | "ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT"
+      | "ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION"
+      | "ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH"
+      | "ACE_X402_ORDER_PACKAGE_ID_ENTITY_ENRICHMENT"
+      | "ACE_X402_ORDER_PACKAGE_ID_AI_CLASSIFICATION"
+      | "ACE_X402_ORDER_AMOUNT_WEB_SEARCH"
+      | "ACE_X402_ORDER_AMOUNT_ENTITY_ENRICHMENT"
+      | "ACE_X402_ORDER_AMOUNT_AI_CLASSIFICATION"
       | "ACE_MOCK_MODE"
       | "ACE_WEB_SEARCH_PATH"
       | "ACE_ENTITY_ENRICHMENT_PATH"
@@ -59,11 +71,27 @@ export class AceX402Client {
       x402Network: config.ACE_X402_NETWORK,
       x402MaxPaymentUsdc: config.ACE_X402_MAX_PAYMENT_USDC,
       x402RequirePayment: config.ACE_X402_REQUIRE_PAYMENT,
+      x402AutoCreateOrders: config.ACE_X402_AUTO_CREATE_ORDERS,
       x402OrderId: config.ACE_X402_ORDER_ID,
       x402OrderIds: {
         web_search: config.ACE_X402_ORDER_ID_WEB_SEARCH,
         entity_enrichment: config.ACE_X402_ORDER_ID_ENTITY_ENRICHMENT,
         ai_classification: config.ACE_X402_ORDER_ID_AI_CLASSIFICATION
+      },
+      x402OrderApplicationIds: {
+        web_search: config.ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH,
+        entity_enrichment: config.ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT,
+        ai_classification: config.ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION
+      },
+      x402OrderPackageIds: {
+        web_search: config.ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH,
+        entity_enrichment: config.ACE_X402_ORDER_PACKAGE_ID_ENTITY_ENRICHMENT,
+        ai_classification: config.ACE_X402_ORDER_PACKAGE_ID_AI_CLASSIFICATION
+      },
+      x402OrderAmounts: {
+        web_search: config.ACE_X402_ORDER_AMOUNT_WEB_SEARCH,
+        entity_enrichment: config.ACE_X402_ORDER_AMOUNT_ENTITY_ENRICHMENT,
+        ai_classification: config.ACE_X402_ORDER_AMOUNT_AI_CLASSIFICATION
       },
       servicePaths: {
         web_search: config.ACE_WEB_SEARCH_PATH,
@@ -73,6 +101,54 @@ export class AceX402Client {
       aiModel: config.ACE_AI_MODEL,
       mockMode: config.ACE_MOCK_MODE
     };
+  }
+
+  public async prepareOrdersForServices(
+    serviceNames: AceServiceName[]
+  ): Promise<AcePreparedOrder[]> {
+    const uniqueServiceNames = Array.from(new Set(serviceNames));
+
+    if (this.config.mockMode || uniqueServiceNames.length === 0) {
+      return [];
+    }
+
+    if (!this.config.x402AutoCreateOrders) {
+      return uniqueServiceNames
+        .map((serviceName) => ({
+          serviceName,
+          orderId: this.getOrderId(serviceName),
+          created: false,
+          source: "configured" as const
+        }))
+        .filter((order) => order.orderId.trim().length > 0);
+    }
+
+    const preparedOrders: AcePreparedOrder[] = [];
+
+    for (const serviceName of uniqueServiceNames) {
+      const existingRuntimeOrderId = this.runtimeOrderIds[serviceName];
+
+      if (existingRuntimeOrderId) {
+        preparedOrders.push({
+          serviceName,
+          orderId: existingRuntimeOrderId,
+          created: false,
+          source: "created"
+        });
+        continue;
+      }
+
+      const orderId = await this.createFreshX402Order(serviceName);
+      this.runtimeOrderIds[serviceName] = orderId;
+      preparedOrders.push({
+        serviceName,
+        orderId,
+        created: true,
+        source: "created"
+      });
+    }
+
+    return preparedOrders;
   }
 
   public async callWebSearchService(
@@ -294,7 +370,7 @@ export class AceX402Client {
 
     if (this.config.x402RequirePayment && !x402OrderPayment) {
       throw new Error(
-        `ACE_X402_REQUIRE_PAYMENT=true but no x402 receipt was produced for ${serviceName}. Configure a per-service ACE_X402_ORDER_ID_* value or use an Ace endpoint that returns an x402 challenge.`
+        `ACE_X402_REQUIRE_PAYMENT=true but no x402 receipt was produced for ${serviceName}. Configure a per-service ACE_X402_ORDER_ID_* value, enable ACE_X402_AUTO_CREATE_ORDERS with Ace application ids, or use an Ace endpoint that returns an x402 challenge.`
       );
     }
 
@@ -334,6 +410,66 @@ export class AceX402Client {
       },
       body: JSON.stringify(payload)
     });
+  }
+
+  private async createFreshX402Order(
+    serviceName: AceServiceName
+  ): Promise<string> {
+    this.assertOrderCreationConfig(serviceName);
+
+    const applicationId =
+      this.config.x402OrderApplicationIds[serviceName]?.trim() ?? "";
+    const packageId = this.config.x402OrderPackageIds[serviceName]?.trim() ?? "";
+    const amount = this.config.x402OrderAmounts[serviceName] ?? 1;
+    const endpoint = new URL(
+      "/api/v1/orders/",
+      ensureTrailingSlash(this.config.platformBaseUrl)
+    );
+    const payload: JsonRecord = {
+      application_id: applicationId,
+      amount,
+      description:
+        `AgentIntel Broker ${SERVICE_LABELS[serviceName]} order ` +
+        new Date().toISOString()
+    };
+
+    if (packageId) {
+      payload.package_id = packageId;
+    }
+
+    // TODO(real Ace): keep this aligned with the official Ace Platform SDK once
+    // order creation is exposed there. The current implementation mirrors the
+    // platform console's POST /api/v1/orders/ flow.
+    const response = await fetch(endpoint, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${this.getPlatformToken()}`,
+        Accept: "application/json",
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify(payload)
+    });
+    const responsePayload = await readJsonResponse(response);
+
+    if (!response.ok) {
+      throw new Error(
+        formatAceOrderCreationFailure(
+          serviceName,
+          response.status,
+          responsePayload
+        )
+      );
+    }
+
+    const orderId = extractAceOrderId(responsePayload);
+
+    if (!orderId) {
+      throw new Error(
+        `Ace order creation for ${serviceName} succeeded with HTTP ${response.status}, but no order id was returned. Response keys: ${Object.keys(responsePayload).join(", ") || "none"}.`
+      );
+    }
+
+    return orderId;
   }
 
   private async payX402OrderIfConfigured(
@@ -503,6 +639,7 @@ export class AceX402Client {
 
   private getOrderId(serviceName: AceServiceName): string {
     return (
+      this.runtimeOrderIds[serviceName]?.trim() ||
       this.config.x402OrderIds[serviceName]?.trim() ||
       this.config.x402OrderId.trim()
     );
@@ -547,6 +684,32 @@ export class AceX402Client {
       );
     }
   }
+
+  private assertOrderCreationConfig(serviceName: AceServiceName): void {
+    const serviceEnvSuffix = SERVICE_ENV_SUFFIXES[serviceName];
+    const missing = [
+      ["ACE_PLATFORM_BASE_URL", this.config.platformBaseUrl],
+      ["ACE_PLATFORM_TOKEN or ACE_API_KEY", this.getPlatformToken()],
+      [
+        `ACE_X402_ORDER_APPLICATION_ID_${serviceEnvSuffix}`,
+        this.config.x402OrderApplicationIds[serviceName] ?? ""
+      ]
+    ]
+      .filter(([, value]) => !value?.trim())
+      .map(([name]) => name);
+    const amount = this.config.x402OrderAmounts[serviceName] ?? 0;
+
+    if (!Number.isFinite(amount) || amount <= 0) {
+      missing.push(`ACE_X402_ORDER_AMOUNT_${serviceEnvSuffix}`);
+    }
+
+    if (missing.length > 0) {
+      throw new Error(
+        `ACE_X402_AUTO_CREATE_ORDERS=true requires ${missing.join(", ")} before creating a fresh Ace order for ${serviceName}. ` +
+          "Set these values from Ace Platform service/application package data, or disable auto-create and provide fresh ACE_X402_ORDER_ID_* values manually."
+      );
+    }
+  }
 }
 
 interface AceX402PaymentProof {
@@ -555,6 +718,18 @@ interface AceX402PaymentProof {
   txSignature: string | null;
   receiptPayload: JsonRecord;
 }
+
+const SERVICE_LABELS: Record<AceServiceName, string> = {
+  web_search: "web search",
+  entity_enrichment: "entity enrichment",
+  ai_classification: "AI classification"
+};
+
+const SERVICE_ENV_SUFFIXES: Record<AceServiceName, string> = {
+  web_search: "WEB_SEARCH",
+  entity_enrichment: "ENTITY_ENRICHMENT",
+  ai_classification: "AI_CLASSIFICATION"
+};
 
 function truncate(value: string, maxLength = 160): string {
   if (value.length <= maxLength) {
@@ -657,6 +832,52 @@ function formatAceOrderPaymentFailure(
   }
 
   return `Ace x402 order payment for ${serviceName} failed with HTTP ${status}: ${JSON.stringify(payload)}`;
+}
+
+function formatAceOrderCreationFailure(
+  serviceName: AceServiceName,
+  status: number,
+  payload: JsonRecord
+): string {
+  const details = payload.detail;
+  const detailText = Array.isArray(details)
+    ? details.map(String).join("; ")
+    : typeof details === "string"
+      ? details
+      : "";
+  const traceId = readString(payload, "trace_id");
+  const suffix = SERVICE_ENV_SUFFIXES[serviceName];
+
+  if (status === 401 || status === 403) {
+    return [
+      `Ace order auto-create for ${serviceName} was rejected with HTTP ${status}.`,
+      "The configured ACE_PLATFORM_TOKEN/ACE_API_KEY does not have permission to create platform orders.",
+      `Use an Ace Platform token with order creation permission, or create a fresh order manually and set ACE_X402_ORDER_ID_${suffix}.`,
+      detailText ? `Ace detail: ${detailText}.` : "",
+      traceId ? `Ace trace_id: ${traceId}.` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return [
+    `Ace order auto-create for ${serviceName} failed with HTTP ${status}.`,
+    detailText ? `Ace detail: ${detailText}.` : "",
+    traceId ? `Ace trace_id: ${traceId}.` : "",
+    `Response: ${JSON.stringify(payload)}`
+  ]
+    .filter(Boolean)
+    .join(" ");
+}
+
+function extractAceOrderId(payload: JsonRecord): string | null {
+  return (
+    readString(payload, "id") ??
+    readString(payload, "order_id") ??
+    readString(payload, "orderId") ??
+    readString(toJsonRecord(payload.order), "id") ??
+    readString(toJsonRecord(payload.data), "id")
+  );
 }
 
 function selectExactPaymentForConfiguredNetwork(

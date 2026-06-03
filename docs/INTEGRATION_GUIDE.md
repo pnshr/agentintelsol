@@ -179,9 +179,19 @@ ACE_X402_PRIVATE_KEY=
 ACE_X402_NETWORK=base
 ACE_X402_MAX_PAYMENT_USDC=1
 ACE_X402_REQUIRE_PAYMENT=true
+ACE_X402_AUTO_CREATE_ORDERS=true
 ACE_X402_ORDER_ID_WEB_SEARCH=
 ACE_X402_ORDER_ID_ENTITY_ENRICHMENT=
 ACE_X402_ORDER_ID_AI_CLASSIFICATION=
+ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH=
+ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT=
+ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION=
+ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH=
+ACE_X402_ORDER_PACKAGE_ID_ENTITY_ENRICHMENT=
+ACE_X402_ORDER_PACKAGE_ID_AI_CLASSIFICATION=
+ACE_X402_ORDER_AMOUNT_WEB_SEARCH=1
+ACE_X402_ORDER_AMOUNT_ENTITY_ENRICHMENT=1
+ACE_X402_ORDER_AMOUNT_AI_CLASSIFICATION=1
 ACE_WEB_SEARCH_PATH=/serp/google
 ACE_ENTITY_ENRICHMENT_PATH=/webextrator/extract
 ACE_AI_CLASSIFICATION_PATH=/openai/chat/completions
@@ -197,11 +207,19 @@ Current code:
 - Real mode uses `x402-fetch` to sign x402 payment headers.
 - Real mode stores `X-PAYMENT-RESPONSE` as non-mock receipt evidence.
 - If `ACE_X402_REQUIRE_PAYMENT=true`, a workflow fails rather than storing a non-x402 receipt.
+- If `ACE_X402_AUTO_CREATE_ORDERS=true`, the workflow creates fresh Ace Platform orders for the selected services before the first paid Ace call. These runtime order ids are used only for the current workflow and are not written back to `.env`.
+
+Order modes:
+
+- Manual order mode: create three Ace orders in the platform UI and paste them into `ACE_X402_ORDER_ID_WEB_SEARCH`, `ACE_X402_ORDER_ID_ENTITY_ENRICHMENT`, and `ACE_X402_ORDER_ID_AI_CLASSIFICATION`.
+- Automatic order mode: set `ACE_X402_AUTO_CREATE_ORDERS=true`, provide the three `ACE_X402_ORDER_APPLICATION_ID_*` values, and optionally provide `ACE_X402_ORDER_PACKAGE_ID_*` plus `ACE_X402_ORDER_AMOUNT_*`.
+- Do not reuse orders whose Ace state is `Finished` or `Failed`; they are not payable again.
+- Automatic order mode requires an Ace platform token that can call `POST /api/v1/orders/`. If the token returns `401` or `403`, create fresh orders manually or generate a platform token with order creation permission.
 
 Expected real implementation:
 
-1. Create or identify Ace platform orders for each paid service.
-2. Put the order ids in the per-service `ACE_X402_ORDER_ID_*` env vars.
+1. Choose manual order mode or automatic order mode.
+2. For automatic order mode, copy the Ace application id for each service from Ace Platform and set the matching `ACE_X402_ORDER_APPLICATION_ID_*` env var.
 3. Fund the Base USDC wallet represented by `ACE_X402_PRIVATE_KEY`.
 4. Run `npm run ace:check` and confirm `readyForRealX402Receipts=true`.
 5. Run the workflow with `ACE_MOCK_MODE=false` and `ACE_X402_REQUIRE_PAYMENT=true`.

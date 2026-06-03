@@ -106,6 +106,23 @@ export class WorkflowOrchestrator {
         targetAddress: input.targetAddress,
         onChainEvidence
       });
+      const preparedAceOrders = await ace.prepareOrdersForServices(
+        selectedTools.map((tool) => tool.serviceName)
+      );
+
+      if (preparedAceOrders.length > 0) {
+        this.logger?.info(
+          {
+            runId,
+            orders: preparedAceOrders.map((order) => ({
+              serviceName: order.serviceName,
+              created: order.created,
+              source: order.source
+            }))
+          },
+          "Prepared Ace x402 orders for workflow"
+        );
+      }
 
       const aceCalls: StoredAceCall[] = [];
 

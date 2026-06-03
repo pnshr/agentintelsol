@@ -8,6 +8,18 @@ const serviceOrderIds = {
   aiClassification: Boolean(config.ACE_X402_ORDER_ID_AI_CLASSIFICATION)
 };
 
+const serviceOrderApplicationIds = {
+  webSearch: Boolean(config.ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH),
+  entityEnrichment: Boolean(config.ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT),
+  aiClassification: Boolean(config.ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION)
+};
+
+const serviceOrderPackageIds = {
+  webSearch: Boolean(config.ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH),
+  entityEnrichment: Boolean(config.ACE_X402_ORDER_PACKAGE_ID_ENTITY_ENRICHMENT),
+  aiClassification: Boolean(config.ACE_X402_ORDER_PACKAGE_ID_AI_CLASSIFICATION)
+};
+
 const result = {
   mockMode: config.ACE_MOCK_MODE,
   serviceApi: {
@@ -30,8 +42,16 @@ const result = {
     network: config.ACE_X402_NETWORK,
     maxPaymentUsdc: config.ACE_X402_MAX_PAYMENT_USDC,
     requirePayment: config.ACE_X402_REQUIRE_PAYMENT,
+    autoCreateOrders: config.ACE_X402_AUTO_CREATE_ORDERS,
     fallbackOrderIdSet: Boolean(config.ACE_X402_ORDER_ID),
-    serviceOrderIds
+    serviceOrderIds,
+    serviceOrderApplicationIds,
+    serviceOrderPackageIds,
+    serviceOrderAmounts: {
+      webSearch: config.ACE_X402_ORDER_AMOUNT_WEB_SEARCH,
+      entityEnrichment: config.ACE_X402_ORDER_AMOUNT_ENTITY_ENRICHMENT,
+      aiClassification: config.ACE_X402_ORDER_AMOUNT_AI_CLASSIFICATION
+    }
   },
   readyForRealAceServiceCalls: Boolean(
     config.ACE_API_KEY &&
@@ -48,12 +68,16 @@ const result = {
       (config.ACE_PLATFORM_TOKEN || config.ACE_API_KEY) &&
       config.ACE_X402_FACILITATOR_URL &&
       config.ACE_X402_PRIVATE_KEY &&
-      serviceOrderIds.webSearch &&
-      serviceOrderIds.entityEnrichment &&
-      serviceOrderIds.aiClassification
+      (config.ACE_X402_AUTO_CREATE_ORDERS
+        ? serviceOrderApplicationIds.webSearch &&
+          serviceOrderApplicationIds.entityEnrichment &&
+          serviceOrderApplicationIds.aiClassification
+        : serviceOrderIds.webSearch &&
+          serviceOrderIds.entityEnrichment &&
+          serviceOrderIds.aiClassification)
   ),
   note:
-    "This check does not submit payments. A real paid run requires ACE_MOCK_MODE=false and valid Ace API/x402 credentials."
+    "This check does not submit payments. A real paid run requires ACE_MOCK_MODE=false and valid Ace API/x402 credentials. If ACE_X402_AUTO_CREATE_ORDERS=true, the platform token must be allowed to POST /api/v1/orders/."
 };
 
 console.log(JSON.stringify(result, null, 2));

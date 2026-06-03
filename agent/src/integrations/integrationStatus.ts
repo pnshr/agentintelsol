@@ -90,6 +90,14 @@ function hasAceConfig(config: AppConfig): boolean {
     return true;
   }
 
+  if (config.ACE_X402_AUTO_CREATE_ORDERS) {
+    return hasAll(
+      config.ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH,
+      config.ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT,
+      config.ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION
+    );
+  }
+
   return hasAll(
     config.ACE_X402_ORDER_ID_WEB_SEARCH,
     config.ACE_X402_ORDER_ID_ENTITY_ENRICHMENT,

@@ -138,7 +138,7 @@ Important groups:
 
 - SAP: `SAP_AGENT_ID`, `SAP_PRIVATE_KEY`, `SAP_REGISTRY_ENDPOINT`, `SAP_MOCK_MODE`
 - Synapse RPC: `SYNAPSE_RPC_URL`, `SYNAPSE_API_KEY`, `SYNAPSE_MOCK_MODE`
-- Ace x402: `ACE_API_KEY`, `ACE_X402_FACILITATOR_URL`, `ACE_X402_PRIVATE_KEY`, `ACE_X402_ORDER_ID_*`, `ACE_MOCK_MODE`
+- Ace x402: `ACE_API_KEY`, `ACE_X402_FACILITATOR_URL`, `ACE_X402_PRIVATE_KEY`, `ACE_X402_ORDER_ID_*` or `ACE_X402_AUTO_CREATE_ORDERS`, `ACE_MOCK_MODE`
 - Sentinel: `SENTINEL_ENDPOINT`, `SENTINEL_DEPOSITOR_WALLET`, `SENTINEL_MOCK_MODE`
 - App controls: `DATABASE_URL`, `API_AUTH_TOKEN`, `CORS_ORIGIN`, `MAX_DAILY_SPEND_USDC`, `MAX_SPEND_PER_RUN_USDC`, `MAX_TOOL_CALLS_PER_RUN`, `PORT`
 
@@ -157,6 +157,7 @@ NEXT_PUBLIC_API_AUTH_TOKEN=
 - Audit bundles are exported as JSON from `GET /api/audit/:runId`.
 - Wallet balances are read from public RPCs through `GET /api/balances`; private keys are never returned by the API.
 - Secrets are loaded from environment variables and are not stored in the database.
+- Ace orders can be created automatically at workflow start with `ACE_X402_AUTO_CREATE_ORDERS=true`; this requires Ace application ids for all three services and a platform token allowed to create orders. Finished or failed Ace orders are never reused as payable orders.
 
 ## Documentation
 
