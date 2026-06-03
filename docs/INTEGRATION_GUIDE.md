@@ -216,6 +216,14 @@ Order modes:
 - Do not reuse orders whose Ace state is `Finished` or `Failed`; they are not payable again.
 - Automatic order mode requires an Ace platform token that can call `POST /api/v1/orders/`. If the token returns `401` or `403`, create fresh orders manually or generate a platform token with order creation permission.
 
+Inspect the service/application mapping:
+
+```powershell
+npm --prefix agent run ace:service-map
+```
+
+This command is read-only. It shows the Ace service ids and package ids for the three configured services, then attempts to find account-specific application ids. If `candidates` is empty, open Ace Platform, apply/enable that service for the account, and copy the created application id into the matching `ACE_X402_ORDER_APPLICATION_ID_*` variable. `application_id` is not the same value as `service.id`.
+
 Expected real implementation:
 
 1. Choose manual order mode or automatic order mode.

@@ -16,6 +16,7 @@
     "sap:register": "tsx src/scripts/registerSapAgent.ts",
     "ace:check": "tsx src/scripts/checkAceX402Access.ts",
     "ace:orders": "tsx src/scripts/listAceOrders.ts",
+    "ace:service-map": "tsx src/scripts/mapAceServices.ts",
     "sentinel:check": "tsx src/scripts/checkSentinelAccess.ts",
     "sentinel:escrow": "tsx src/scripts/openSentinelEscrow.ts",
     "db:reset": "tsx src/scripts/resetLocalDatabase.ts",

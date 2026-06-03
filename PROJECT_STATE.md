@@ -183,6 +183,8 @@ Completed:
 - Updated Ace integration status so real x402 can be considered configured either with manual per-service order ids or with automatic order creation config.
 - Improved Ace order payment errors so Finished/Failed orders produce actionable messages instead of raw platform JSON.
 - Updated local `.env` to enable `ACE_X402_AUTO_CREATE_ORDERS=true` without printing secrets. The missing `ACE_X402_ORDER_APPLICATION_ID_*` values still need to be filled before real automatic order creation can succeed.
+- Added `npm --prefix agent run ace:service-map`, a read-only helper that maps configured Ace service paths to Ace service ids/packages and checks whether account-specific application ids already exist.
+- Current `ace:service-map` result shows the three service ids, but no application candidates yet. The Ace account still needs service applications to be applied/enabled and copied into `ACE_X402_ORDER_APPLICATION_ID_*`.
 
 ## Latest Anti-Wash Policy Fix
 
