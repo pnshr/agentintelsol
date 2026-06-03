@@ -212,7 +212,7 @@ Current code:
 Order modes:
 
 - Manual order mode: create three Ace orders in the platform UI and paste them into `ACE_X402_ORDER_ID_WEB_SEARCH`, `ACE_X402_ORDER_ID_ENTITY_ENRICHMENT`, and `ACE_X402_ORDER_ID_AI_CLASSIFICATION`.
-- Automatic order mode: set `ACE_X402_AUTO_CREATE_ORDERS=true`, provide the three `ACE_X402_ORDER_APPLICATION_ID_*` values, and optionally provide `ACE_X402_ORDER_PACKAGE_ID_*` plus `ACE_X402_ORDER_AMOUNT_*`.
+- Automatic order mode: set `ACE_X402_AUTO_CREATE_ORDERS=true`, provide the three `ACE_X402_ORDER_APPLICATION_ID_*` values, provide the three `ACE_X402_ORDER_PACKAGE_ID_*` values, and set the matching `ACE_X402_ORDER_AMOUNT_*` values.
 - Do not reuse orders whose Ace state is `Finished` or `Failed`; they are not payable again.
 - Automatic order mode requires an Ace platform token that can call `POST /api/v1/orders/`. If the token returns `401` or `403`, create fresh orders manually or generate a platform token with order creation permission.
 
@@ -222,12 +222,12 @@ Inspect the service/application mapping:
 npm --prefix agent run ace:service-map
 ```
 
-This command is read-only. It shows the Ace service ids and package ids for the three configured services, then attempts to find account-specific application ids. If `candidates` is empty, open Ace Platform, apply/enable that service for the account, and copy the created application id into the matching `ACE_X402_ORDER_APPLICATION_ID_*` variable. `application_id` is not the same value as `service.id`.
+This command is read-only. It shows the Ace service ids and package ids for the three configured services, then attempts to find account-specific application ids. If `candidates` is empty, open Ace Platform, apply/enable that service for the account, and copy the created application id into the matching `ACE_X402_ORDER_APPLICATION_ID_*` variable. Also copy one package id into the matching `ACE_X402_ORDER_PACKAGE_ID_*` variable. `application_id` is not the same value as `service.id`, and Ace order creation currently requires `package_id` when `application_id` is provided.
 
 Expected real implementation:
 
 1. Choose manual order mode or automatic order mode.
-2. For automatic order mode, copy the Ace application id for each service from Ace Platform and set the matching `ACE_X402_ORDER_APPLICATION_ID_*` env var.
+2. For automatic order mode, copy the Ace application id and package id for each service from Ace Platform and set the matching `ACE_X402_ORDER_APPLICATION_ID_*` and `ACE_X402_ORDER_PACKAGE_ID_*` env vars.
 3. Fund the Base USDC wallet represented by `ACE_X402_PRIVATE_KEY`.
 4. Run `npm run ace:check` and confirm `readyForRealX402Receipts=true`.
 5. Run the workflow with `ACE_MOCK_MODE=false` and `ACE_X402_REQUIRE_PAYMENT=true`.

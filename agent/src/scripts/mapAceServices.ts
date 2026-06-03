@@ -8,22 +8,26 @@ const serviceTargets: Record<
   AceServiceName,
   {
     env: string;
+    packageEnv: string;
     preferredAlias: string;
     configuredPath: string;
   }
 > = {
   web_search: {
     env: "ACE_X402_ORDER_APPLICATION_ID_WEB_SEARCH",
+    packageEnv: "ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH",
     preferredAlias: "serp",
     configuredPath: config.ACE_WEB_SEARCH_PATH
   },
   entity_enrichment: {
     env: "ACE_X402_ORDER_APPLICATION_ID_ENTITY_ENRICHMENT",
+    packageEnv: "ACE_X402_ORDER_PACKAGE_ID_ENTITY_ENRICHMENT",
     preferredAlias: "webextrator",
     configuredPath: config.ACE_ENTITY_ENRICHMENT_PATH
   },
   ai_classification: {
     env: "ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION",
+    packageEnv: "ACE_X402_ORDER_PACKAGE_ID_AI_CLASSIFICATION",
     preferredAlias: "openai",
     configuredPath: config.ACE_AI_CLASSIFICATION_PATH
   }
@@ -41,6 +45,7 @@ async function main(): Promise<void> {
   >) {
     const service = findService(services, target);
     const serviceId = service ? readString(service, "id") : null;
+    const packages = summarizePackages(service);
     const applicationLookup = serviceId
       ? await tryFindApplications(serviceId)
       : {
@@ -53,6 +58,7 @@ async function main(): Promise<void> {
     results.push({
       serviceName,
       applicationIdEnv: target.env,
+      packageIdEnv: target.packageEnv,
       configuredAcePath: target.configuredPath,
       service: service
         ? {
@@ -64,12 +70,13 @@ async function main(): Promise<void> {
               : []
           }
         : null,
-      packages: summarizePackages(service),
+      packages,
+      recommendedPackage: packages[0] ?? null,
       applicationLookup,
       nextStep:
         applicationLookup.candidates.length > 0
-          ? `Copy one candidate id into ${target.env}.`
-          : `Open Ace Platform, apply/enable this service for your account, then copy the created application id into ${target.env}.`
+          ? `Copy one candidate id into ${target.env}, and copy a package id into ${target.packageEnv}.`
+          : `Open Ace Platform, apply/enable this service for your account, then copy the created application id into ${target.env} and a package id into ${target.packageEnv}.`
     });
   }
 

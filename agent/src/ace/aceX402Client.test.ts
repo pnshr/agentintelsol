@@ -100,4 +100,16 @@ describe("AceX402Client order preparation", () => {
       /ACE_X402_ORDER_APPLICATION_ID_AI_CLASSIFICATION/
     );
   });
+
+  it("fails early when auto-create is enabled without a package id", async () => {
+    const client = new AceX402Client({
+      ...baseConfig,
+      ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH: ""
+    });
+
+    await assert.rejects(
+      () => client.prepareOrdersForServices(["web_search"]),
+      /ACE_X402_ORDER_PACKAGE_ID_WEB_SEARCH/
+    );
+  });
 });

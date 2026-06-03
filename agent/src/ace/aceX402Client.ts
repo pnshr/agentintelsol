@@ -693,6 +693,10 @@ export class AceX402Client {
       [
         `ACE_X402_ORDER_APPLICATION_ID_${serviceEnvSuffix}`,
         this.config.x402OrderApplicationIds[serviceName] ?? ""
+      ],
+      [
+        `ACE_X402_ORDER_PACKAGE_ID_${serviceEnvSuffix}`,
+        this.config.x402OrderPackageIds[serviceName] ?? ""
       ]
     ]
       .filter(([, value]) => !value?.trim())
@@ -706,7 +710,7 @@ export class AceX402Client {
     if (missing.length > 0) {
       throw new Error(
         `ACE_X402_AUTO_CREATE_ORDERS=true requires ${missing.join(", ")} before creating a fresh Ace order for ${serviceName}. ` +
-          "Set these account-specific Ace application ids from Ace Platform. `application_id` is not the same as `service.id`. " +
+          "Set these account-specific Ace application/package ids from Ace Platform. `application_id` is not the same as `service.id`. " +
           "Run `npm --prefix agent run ace:service-map` to inspect the required service mapping, or disable auto-create and provide fresh ACE_X402_ORDER_ID_* values manually."
       );
     }

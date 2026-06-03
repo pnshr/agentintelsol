@@ -71,7 +71,10 @@ const result = {
       (config.ACE_X402_AUTO_CREATE_ORDERS
         ? serviceOrderApplicationIds.webSearch &&
           serviceOrderApplicationIds.entityEnrichment &&
-          serviceOrderApplicationIds.aiClassification
+          serviceOrderApplicationIds.aiClassification &&
+          serviceOrderPackageIds.webSearch &&
+          serviceOrderPackageIds.entityEnrichment &&
+          serviceOrderPackageIds.aiClassification
         : serviceOrderIds.webSearch &&
           serviceOrderIds.entityEnrichment &&
           serviceOrderIds.aiClassification)
