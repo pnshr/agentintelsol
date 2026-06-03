@@ -16,10 +16,16 @@ export const API_BASE_URL =
   process.env.NEXT_PUBLIC_API_BASE_URL ?? "http://127.0.0.1:3001";
 const API_AUTH_TOKEN = process.env.NEXT_PUBLIC_API_AUTH_TOKEN ?? "";
 const REQUEST_TIMEOUT_MS = 12000;
+const WORKFLOW_REQUEST_TIMEOUT_MS = 180000;
 
-async function request<T>(path: string, options?: RequestInit): Promise<T> {
+interface ApiRequestOptions extends RequestInit {
+  timeoutMs?: number;
+}
+
+async function request<T>(path: string, options?: ApiRequestOptions): Promise<T> {
   const controller = new AbortController();
-  const timeout = window.setTimeout(() => controller.abort(), REQUEST_TIMEOUT_MS);
+  const { timeoutMs = REQUEST_TIMEOUT_MS, ...fetchOptions } = options ?? {};
+  const timeout = window.setTimeout(() => controller.abort(), timeoutMs);
 
   let response: Response;
 
@@ -28,15 +34,15 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
       headers: {
         "Content-Type": "application/json",
         ...(API_AUTH_TOKEN ? { Authorization: `Bearer ${API_AUTH_TOKEN}` } : {}),
-        ...(options?.headers ?? {})
+        ...(fetchOptions.headers ?? {})
       },
-      ...options,
+      ...fetchOptions,
       signal: controller.signal
     });
   } catch (error) {
     if (error instanceof DOMException && error.name === "AbortError") {
       throw new Error(
-        `API request timed out after ${REQUEST_TIMEOUT_MS / 1000}s: ${API_BASE_URL}${path}`
+        `API request timed out after ${timeoutMs / 1000}s: ${API_BASE_URL}${path}`
       );
     }
 
@@ -94,11 +100,13 @@ export const api = {
   analyze: (input: AnalyzeRequest) =>
     request<AnalyzeResult>("/api/analyze", {
       method: "POST",
-      body: JSON.stringify(input)
+      body: JSON.stringify(input),
+      timeoutMs: WORKFLOW_REQUEST_TIMEOUT_MS
     }),
   scheduledDemoRun: () =>
     request<AnalyzeResult>("/api/scheduled-demo-run", {
-      method: "POST"
+      method: "POST",
+      timeoutMs: WORKFLOW_REQUEST_TIMEOUT_MS
     })
 };
 

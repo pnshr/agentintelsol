@@ -376,7 +376,7 @@ export class AceX402Client {
 
     if (!response.ok) {
       throw new Error(
-        `Ace x402 order payment for ${serviceName} failed with HTTP ${response.status}: ${JSON.stringify(payload)}`
+        formatAceOrderPaymentFailure(serviceName, orderId, response.status, payload)
       );
     }
 
@@ -626,6 +626,37 @@ function buildX402ProofFromHeaders(input: {
       ...(input.extraPayload ?? {})
     }
   };
+}
+
+function formatAceOrderPaymentFailure(
+  serviceName: AceServiceName,
+  orderId: string,
+  status: number,
+  payload: JsonRecord
+): string {
+  const details = payload.detail;
+  const detailText = Array.isArray(details)
+    ? details.map(String).join("; ")
+    : typeof details === "string"
+      ? details
+      : "";
+  const traceId = readString(payload, "trace_id");
+  const stateMatch = detailText.match(/state\s+([A-Za-z_]+)/i);
+  const state = stateMatch?.[1];
+
+  if (detailText.toLowerCase().includes("order is not payable")) {
+    return [
+      `Ace x402 order for ${serviceName} is no longer payable`,
+      `(order ${orderId}${state ? `, state ${state}` : ""}).`,
+      "Create a fresh Ace Data Cloud order id for this service and update ACE_X402_ORDER_ID_*.",
+      "Do not reuse Finished or Failed orders for new paid workflow runs.",
+      traceId ? `Ace trace_id: ${traceId}.` : ""
+    ]
+      .filter(Boolean)
+      .join(" ");
+  }
+
+  return `Ace x402 order payment for ${serviceName} failed with HTTP ${status}: ${JSON.stringify(payload)}`;
 }
 
 function selectExactPaymentForConfiguredNetwork(
