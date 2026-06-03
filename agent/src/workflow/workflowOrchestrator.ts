@@ -230,7 +230,10 @@ export class WorkflowOrchestrator {
       };
     } catch (error) {
       const message = error instanceof Error ? error.message : "Unknown workflow error";
-      this.logger?.error({ error, runId }, "Intelligence workflow failed");
+      this.logger?.error(
+        { error: serializeWorkflowError(error), runId },
+        "Intelligence workflow failed"
+      );
 
       await this.db
         .update(workflowRuns)
@@ -407,6 +410,32 @@ function getReceiptTimestamp(serviceResult: AceServiceCallResult): string {
   }
 
   return new Date().toISOString();
+}
+
+function serializeWorkflowError(error: unknown): Record<string, unknown> {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error)
+    };
+  }
+
+  const cause = error.cause;
+  const causeRecord =
+    typeof cause === "object" && cause !== null
+      ? (cause as Record<string, unknown>)
+      : {};
+
+  return {
+    name: error.name,
+    message: error.message,
+    stack: error.stack,
+    causeName:
+      typeof causeRecord.name === "string" ? causeRecord.name : null,
+    causeMessage:
+      typeof causeRecord.message === "string" ? causeRecord.message : null,
+    causeCode:
+      typeof causeRecord.code === "string" ? causeRecord.code : null
+  };
 }
 
 function validateSolanaAddress(address: string): void {

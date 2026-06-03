@@ -50,7 +50,11 @@ export class SentinelClient {
     context: SentinelCheckContext
   ): Promise<SentinelCheckResult> {
     if (!this.config.SENTINEL_MOCK_MODE) {
-      return this.callRealSentinelGateway(targetType, targetAddress, context);
+      try {
+        return await this.callRealSentinelGateway(targetType, targetAddress, context);
+      } catch (error) {
+        return this.buildFailedRealAttempt(targetType, targetAddress, context, error);
+      }
     }
 
     const sentinelAgentId =
@@ -321,6 +325,63 @@ export class SentinelClient {
       : this.config.SENTINEL_TOOL_WALLET;
   }
 
+  private buildFailedRealAttempt(
+    targetType: SentinelTargetType,
+    targetAddress: string,
+    context: SentinelCheckContext,
+    error: unknown
+  ): SentinelCheckResult {
+    const checkedAt = nowIso();
+    const toolName = this.selectToolName(targetType);
+    const endpoint = buildSentinelToolEndpoint(
+      this.config.SENTINEL_ENDPOINT,
+      this.config.SENTINEL_CHECK_PATH,
+      toolName
+    );
+    const errorSummary = formatUnknownError(error);
+    const paymentChallenge =
+      error instanceof SentinelGatewayPaymentError ? error.challenge : null;
+    const riskFlag = paymentChallenge
+      ? "sentinel_payment_required"
+      : "sentinel_unavailable";
+
+    return {
+      mode: "real",
+      sentinelAgentId: this.config.SENTINEL_AGENT_ID,
+      targetType,
+      targetAddress,
+      checkType:
+        targetType === "token" ? "risk_screen" : "reputation_screen",
+      status: "failed",
+      confidence: 0,
+      riskFlags: [riskFlag],
+      resultSummary:
+        `Real Synapse Sentinel attempt failed for ${toolName}: ${errorSummary}`,
+      proofPayload: {
+        mock: false,
+        proofType: "synapse-sentinel-real-attempt-failed",
+        sentinelAgentId: this.config.SENTINEL_AGENT_ID,
+        merchantWallet: this.config.SENTINEL_MERCHANT_WALLET,
+        depositorWallet: this.config.SENTINEL_DEPOSITOR_WALLET || null,
+        toolName,
+        endpoint: endpoint.toString(),
+        runId: context.runId ?? null,
+        attempted: true,
+        checkedAt,
+        error: serializeUnknownError(error),
+        paymentChallenge: paymentChallenge ? toJsonValue(paymentChallenge) : null
+      },
+      rawResponse: {
+        mock: false,
+        gatewayMode: "sap-x402",
+        attempted: true,
+        error: serializeUnknownError(error),
+        paymentChallenge: paymentChallenge ? toJsonValue(paymentChallenge) : null
+      },
+      checkedAt
+    };
+  }
+
   private assertGatewayConfig(options: { requireDepositor: boolean }): void {
     const missing = [
       ["SENTINEL_AGENT_ID", this.config.SENTINEL_AGENT_ID],
@@ -572,6 +633,42 @@ async function readResponsePayload(response: Response): Promise<JsonRecord> {
       rawText: text
     };
   }
+}
+
+function formatUnknownError(error: unknown): string {
+  const serialized = serializeUnknownError(error);
+  const parts = [
+    serialized.message,
+    serialized.causeMessage ? `cause: ${serialized.causeMessage}` : "",
+    serialized.causeCode ? `code: ${serialized.causeCode}` : ""
+  ].filter(Boolean);
+
+  return parts.join("; ") || "unknown error";
+}
+
+function serializeUnknownError(error: unknown): JsonRecord {
+  if (!(error instanceof Error)) {
+    return {
+      message: String(error)
+    };
+  }
+
+  const cause = error.cause;
+  const causeRecord =
+    typeof cause === "object" && cause !== null
+      ? (cause as Record<string, unknown>)
+      : {};
+
+  return {
+    name: error.name,
+    message: error.message,
+    causeName:
+      typeof causeRecord.name === "string" ? causeRecord.name : null,
+    causeMessage:
+      typeof causeRecord.message === "string" ? causeRecord.message : null,
+    causeCode:
+      typeof causeRecord.code === "string" ? causeRecord.code : null
+  };
 }
 
 function sha256Json(value: unknown): string {

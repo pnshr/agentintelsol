@@ -186,6 +186,8 @@ Completed:
 - Added `npm --prefix agent run ace:service-map`, a read-only helper that maps configured Ace service paths to Ace service ids/packages and checks whether account-specific application ids already exist.
 - Current local Ace env includes the three visible application ids from Ace Platform plus the minimum package id shown by `ace:service-map`; backend readiness now reports `aceX402: configured`.
 - Added Ace x402 payment preflight before signing order payments so package orders that exceed `ACE_X402_MAX_PAYMENT_USDC` fail with the required USDC amount and safety guidance instead of the generic x402-fetch "Payment amount exceeds maximum allowed" error.
+- Added manual Ace order recovery support. When a real paid workflow completes Ace/x402 calls but Sentinel is temporarily unreachable, `npm --prefix agent run workflow:recover-paid-run -- <runId>` can generate a report from stored receipts without repeating Ace payments.
+- Recovered run `ddab6f40-393c-4357-b1b0-b90052e65964` after three real Ace x402 settlements. It now has report `aa3e9562-a11a-409a-b3d4-759bb69ae7c7`, total cost `37.05 USDC`, verdict `monitor`, and Sentinel evidence marked as a real failed attempt due to `UND_ERR_CONNECT_TIMEOUT`.
 
 ## Latest Anti-Wash Policy Fix
 

@@ -11,6 +11,7 @@
     "demo:run": "tsx src/scripts/runDemoWorkflow.ts",
     "demo:synapse-real": "tsx src/scripts/runSynapseRealWorkflow.ts",
     "demo:seed": "tsx src/scripts/seedDemoData.ts",
+    "workflow:recover-paid-run": "tsx src/scripts/recoverPaidFailedRun.ts",
     "sap:check": "tsx src/scripts/checkSapSdkAccess.ts",
     "sap:discovery": "tsx src/scripts/checkSapDiscovery.ts",
     "sap:register": "tsx src/scripts/registerSapAgent.ts",
