@@ -1,4 +1,4 @@
-import { and, count, eq, gte, sql } from "drizzle-orm";
+import { and, count, eq, gte, inArray, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import type { AppConfig } from "../config/env";
 import type { AppDatabase } from "../db/runsRepository";
@@ -57,7 +57,7 @@ export class SpendingPolicy {
     if (repeatedCount >= MAX_IDENTICAL_TARGET_RUNS_PER_DAY) {
       throw new SpendingPolicyError(
         "REPEATED_TARGET_LIMIT_EXCEEDED",
-        "Identical target has reached the daily run limit",
+        "This target reached today's analysis limit. Choose a different address or wait until tomorrow; the limit protects against artificial repeated usage.",
         {
           targetType,
           targetAddress,
@@ -205,7 +205,7 @@ export class SpendingPolicy {
     if (repeatedTargetCount > MAX_IDENTICAL_TARGET_RUNS_PER_DAY) {
       throw new SpendingPolicyError(
         "REPEATED_TARGET_LIMIT_EXCEEDED",
-        "Run target appears more than the allowed number of times today",
+        "This target reached today's analysis limit. Choose a different address or wait until tomorrow; the limit protects against artificial repeated usage.",
         {
           runId,
           targetType: run.targetType,
@@ -299,8 +299,12 @@ export class SpendingPolicy {
     targetType: "token" | "wallet",
     targetAddress: string
   ): Promise<number> {
-    const [row] = await this.db
-      .select({ value: count() })
+    const runs = await this.db
+      .select({
+        id: workflowRuns.id,
+        status: workflowRuns.status,
+        totalCost: workflowRuns.totalCost
+      })
       .from(workflowRuns)
       .where(
         and(
@@ -310,7 +314,28 @@ export class SpendingPolicy {
         )
       );
 
-    return row?.value ?? 0;
+    const failedRunIds = runs
+      .filter((run) => run.status === "failed" && run.totalCost <= 0)
+      .map((run) => run.id);
+    const failedRunsWithSpend = new Set<string>();
+
+    if (failedRunIds.length > 0) {
+      const spendingRows = await this.db
+        .select({ runId: spendingEvents.runId })
+        .from(spendingEvents)
+        .where(inArray(spendingEvents.runId, failedRunIds));
+
+      for (const row of spendingRows) {
+        failedRunsWithSpend.add(row.runId);
+      }
+    }
+
+    return runs.filter(
+      (run) =>
+        run.status !== "failed" ||
+        run.totalCost > 0 ||
+        failedRunsWithSpend.has(run.id)
+    ).length;
   }
 
   private validateReceipt(

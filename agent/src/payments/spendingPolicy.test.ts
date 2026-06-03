@@ -168,6 +168,47 @@ describe("SpendingPolicy", () => {
     );
   });
 
+  it("does not count failed no-spend attempts toward repeated target limit", async () => {
+    const policy = createPolicy();
+
+    for (let index = 0; index < 10; index += 1) {
+      await seedRun({
+        id: `failed-repeat-${index}`,
+        targetAddress: "FailedTarget111111111111111111111111111111111",
+        status: "failed"
+      });
+    }
+
+    const allowed = await policy.checkCanStartRun(
+      "token",
+      "FailedTarget111111111111111111111111111111111"
+    );
+
+    assert.deepEqual(allowed, { allowed: true });
+  });
+
+  it("counts failed attempts with spend toward repeated target limit", async () => {
+    const policy = createPolicy();
+
+    for (let index = 0; index < 3; index += 1) {
+      const runId = await seedRun({
+        id: `paid-failed-repeat-${index}`,
+        targetAddress: "PaidFailedTarget111111111111111111111111111111",
+        status: "failed"
+      });
+      await seedSpendingEvent(runId, 0.01);
+    }
+
+    await assertPolicyError(
+      () =>
+        policy.checkCanStartRun(
+          "token",
+          "PaidFailedTarget111111111111111111111111111111"
+        ),
+      "REPEATED_TARGET_LIMIT_EXCEEDED"
+    );
+  });
+
   it("allows and records a normal valid service call", async () => {
     const runId = await seedRun();
     const policy = createPolicy();
@@ -233,6 +274,7 @@ describe("SpendingPolicy", () => {
       id?: string;
       targetType?: "token" | "wallet";
       targetAddress?: string;
+      status?: "queued" | "running" | "completed" | "failed";
     } = {}
   ): Promise<string> {
     const id = input.id ?? randomUUID();
@@ -244,7 +286,7 @@ describe("SpendingPolicy", () => {
         input.targetAddress ?? "So11111111111111111111111111111111111111112",
       triggerType: "api",
       requester: "test",
-      status: "running",
+      status: input.status ?? "running",
       startedAt: new Date(),
       completedAt: null,
       totalCost: 0,

@@ -184,6 +184,15 @@ Completed:
 - Improved Ace order payment errors so Finished/Failed orders produce actionable messages instead of raw platform JSON.
 - Updated local `.env` to enable `ACE_X402_AUTO_CREATE_ORDERS=true` without printing secrets. The missing `ACE_X402_ORDER_APPLICATION_ID_*` values still need to be filled before real automatic order creation can succeed.
 
+## Latest Anti-Wash Policy Fix
+
+Completed:
+
+- Moved repeated-target preflight before workflow run creation, so blocked attempts no longer create extra failed runs.
+- Updated repeated-target counting to ignore failed no-spend attempts while still counting completed, running, and failed runs that already recorded spend.
+- Improved the repeated-target error message so it explains that the limit is an anti-wash protection.
+- Added tests for failed no-spend attempts and failed paid attempts.
+
 Verification after cleanup:
 
 - `npm.cmd run typecheck` passed in `agent`.

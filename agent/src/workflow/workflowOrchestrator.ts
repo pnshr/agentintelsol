@@ -57,6 +57,22 @@ export class WorkflowOrchestrator {
   public async runIntelligenceWorkflow(
     input: RunIntelligenceWorkflowInput
   ): Promise<WorkflowRunResult> {
+    const spendingPolicy = SpendingPolicy.fromAppConfig(this.db, this.config);
+
+    try {
+      validateSolanaAddress(input.targetAddress);
+      await spendingPolicy.checkCanStartRun(input.targetType, input.targetAddress);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Unknown workflow error";
+
+      return {
+        runId: "preflight-rejected",
+        reportId: null,
+        status: "failed",
+        error: message
+      };
+    }
+
     const runId = randomUUID();
     const startedAt = new Date();
 
@@ -74,9 +90,6 @@ export class WorkflowOrchestrator {
     });
 
     try {
-      validateSolanaAddress(input.targetAddress);
-
-      const spendingPolicy = SpendingPolicy.fromAppConfig(this.db, this.config);
       await spendingPolicy.validateNoWashPattern(runId);
 
       const synapse = new SynapseRpcClient(this.config);
