@@ -24,6 +24,8 @@ const BASE58_ALPHABET =
 const METAPLEX_TOKEN_METADATA_PROGRAM_ID = new PublicKey(
   "metaqbxxUerdq28cj1RbAWkYQm3ybzjb6a8bt518x1s"
 );
+const RPC_MAX_ATTEMPTS = 3;
+const RPC_RETRY_DELAY_MS = 350;
 
 export class SynapseRpcClient {
   private readonly config: SynapseRpcConfig;
@@ -130,22 +132,41 @@ export class SynapseRpcClient {
     mintAddress: string
   ): Promise<SynapseRpcEnvelope<TokenSupply>> {
     if (!this.config.mockMode) {
-      const result = await this.requestRpc<RealTokenSupplyResult>("getTokenSupply", [
-        mintAddress,
-        {
-          commitment: "confirmed"
-        }
-      ]);
-      const value = result.value;
+      try {
+        const result = await this.requestRpc<RealTokenSupplyResult>("getTokenSupply", [
+          mintAddress,
+          {
+            commitment: "confirmed"
+          }
+        ]);
+        const value = result.value;
 
-      return wrapReal("getTokenSupply", { mintAddress }, result, {
-        mintAddress,
-        amount: value.amount,
-        decimals: value.decimals,
-        uiAmount: value.uiAmount ?? 0,
-        uiAmountString: value.uiAmountString,
-        slot: result.context.slot
-      });
+        return wrapReal("getTokenSupply", { mintAddress }, result, {
+          mintAddress,
+          amount: value.amount,
+          decimals: value.decimals,
+          uiAmount: value.uiAmount ?? 0,
+          uiAmountString: value.uiAmountString,
+          slot: result.context.slot
+        });
+      } catch (error) {
+        return wrapReal(
+          "getTokenSupply",
+          { mintAddress },
+          {
+            error: errorMessage(error),
+            fallback: "Token supply unavailable from Synapse RPC for this run."
+          },
+          {
+            mintAddress,
+            amount: "0",
+            decimals: 0,
+            uiAmount: 0,
+            uiAmountString: "0",
+            slot: 0
+          }
+        );
+      }
     }
 
     const decimals = numberFromHash(`${mintAddress}:decimals`, 6, 9);
@@ -431,45 +452,68 @@ export class SynapseRpcClient {
       );
     }
 
-    const response = await fetch(this.config.rpcUrl, {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        ...(this.config.apiKey
-          ? {
-              Authorization: `Bearer ${this.config.apiKey}`,
-              "X-API-Key": this.config.apiKey
-            }
-          : {})
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0",
-        id: mockId("synapse_rpc", { method, params, at: Date.now() }, 10),
-        method,
-        params
-      })
-    });
+    let lastError: Error | null = null;
 
-    const text = await response.text();
-    const payload = parseRpcPayload<T>(text);
+    for (let attempt = 1; attempt <= RPC_MAX_ATTEMPTS; attempt += 1) {
+      try {
+        const response = await fetch(this.config.rpcUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            ...(this.config.apiKey
+              ? {
+                  Authorization: `Bearer ${this.config.apiKey}`,
+                  "X-API-Key": this.config.apiKey
+                }
+              : {})
+          },
+          body: JSON.stringify({
+            jsonrpc: "2.0",
+            id: mockId("synapse_rpc", { method, params, at: Date.now() }, 10),
+            method,
+            params
+          })
+        });
 
-    if (!response.ok) {
-      throw new Error(
-        `Synapse RPC ${method} HTTP ${response.status}: ${
-          payload.error?.message ?? response.statusText
-        }`
-      );
+        const text = await response.text();
+        const payload = parseRpcPayload<T>(text);
+
+        if (!response.ok) {
+          const message = `Synapse RPC ${method} HTTP ${response.status}: ${
+            payload.error?.message ?? response.statusText
+          }`;
+          lastError = new Error(message);
+
+          if (shouldRetryRpcError(response.status, message, attempt)) {
+            await sleep(RPC_RETRY_DELAY_MS * attempt);
+            continue;
+          }
+
+          throw lastError;
+        }
+
+        if (payload.error || payload.result === undefined) {
+          throw new Error(
+            `Synapse RPC ${method} failed: ${
+              payload.error?.message ?? response.statusText
+            }`
+          );
+        }
+
+        return payload.result;
+      } catch (error) {
+        lastError = error instanceof Error ? error : new Error(String(error));
+
+        if (shouldRetryRpcError(null, lastError.message, attempt)) {
+          await sleep(RPC_RETRY_DELAY_MS * attempt);
+          continue;
+        }
+
+        throw lastError;
+      }
     }
 
-    if (payload.error || payload.result === undefined) {
-      throw new Error(
-        `Synapse RPC ${method} failed: ${
-          payload.error?.message ?? response.statusText
-        }`
-      );
-    }
-
-    return payload.result;
+    throw lastError ?? new Error(`Synapse RPC ${method} failed.`);
   }
 
   private async tryRequestRpc<T>(
@@ -651,6 +695,33 @@ function parseRpcPayload<T>(text: string): {
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
+}
+
+function shouldRetryRpcError(
+  status: number | null,
+  message: string,
+  attempt: number
+): boolean {
+  if (attempt >= RPC_MAX_ATTEMPTS) {
+    return false;
+  }
+
+  const normalizedMessage = message.toLowerCase();
+  const transientStatus =
+    status === 429 || status === 500 || status === 502 || status === 503 || status === 504;
+  const transientMessage =
+    normalizedMessage.includes("upstream") ||
+    normalizedMessage.includes("connect") ||
+    normalizedMessage.includes("timeout") ||
+    normalizedMessage.includes("temporarily unavailable");
+
+  return transientStatus || transientMessage;
+}
+
+function sleep(milliseconds: number): Promise<void> {
+  return new Promise((resolve) => {
+    setTimeout(resolve, milliseconds);
+  });
 }
 
 function wrap<T>(
